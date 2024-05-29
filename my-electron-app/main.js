@@ -1,9 +1,23 @@
 // main.js
-
+// import {activeWindow} from 'get-windows';
 // Modules to control application life and create native browser window
-const { app, BrowserWindow, Menu, shell } = require('electron')
-const path = require('node:path');
-const isMac = process.platform === 'darwin'
+const {
+    app,
+    BrowserWindow,
+    Menu,
+    shell,
+    ipcMain,
+} = require("electron");
+
+// const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+// const { activeWindow } = require('get-windows');
+
+// console.log( activeWindow);
+const { execSync } = require("child_process");
+
+const path = require("node:path");
+const isMac = process.platform === "darwin";
+let totalTime = 0;
 
 const menuItems = [
     {
@@ -13,105 +27,123 @@ const menuItems = [
                 label: "Exit",
                 click: () => {
                     app.quit();
-                }
+                },
             },
             {
-                type: "separator"
+                type: "separator",
             },
             {
                 label: "Learn more",
-            }
-
-        ]
-    }, {
-        label: 'File',
+            },
+        ],
+    },
+    {
+        label: "File",
         submenu: [
             {
-                label: 'New window',
+                label: "New window",
                 click: async () => {
                     const win2 = new BrowserWindow({
                         height: 300,
                         width: 400,
-                        show:'false',
-                        backgroundColor:'#ff00a3',
-                        movable:'false'
+                        show: "false",
+                        backgroundColor: "#ff00a3",
+                        movable: "false",
                     });
 
-                    win2.loadFile('index2.html')
+                    win2.loadFile("index2.html");
                     // win2.loadURL('https://github.com')
-                    win2.once('ready-to-show',() =>{
+                    win2.once("ready-to-show", () => {
                         win2.show();
-                    })
-                }
+                    });
+                },
             },
             {
-                label: 'Open Camera',
+                label: "Open Camera",
                 click: async () => {
                     const win2 = new BrowserWindow({
                         height: 500,
                         width: 800,
-                        show:'false',
-                        backgroundColor:'#2e2c29',
-                        movable:'false'
+                        show: "false",
+                        backgroundColor: "#2e2c29",
+                        movable: "false",
+                        webPreferences: {
+                            preload: path.join(__dirname, "cameraPreload.js"),
+                        },
                     });
 
-                    win2.webContents.openDevTools();
-                    win2.loadFile('camera.html')
+                    win2.on("focus", () => {
+                        console.log(
+                            `Total screen time of main window:${Math.floor(totalTime / 1000)}`
+                        );
+                    });
+
+                    ipcMain.on("close-window-2", () => {
+                        win2.close();
+                    });
+
+                    // win2.webContents.openDevTools();
+                    win2.loadFile("camera.html");
                     // win2.loadURL('https://github.com')
-                    win2.once('ready-to-show',() =>{
+                    win2.once("ready-to-show", () => {
                         win2.show();
-                    })
-                }
-            }
-        ]
-    }, {
-        label: 'Window',
+                    });
+                },
+            },
+        ],
+    },
+    {
+        label: "Window",
         submenu: [
-            { role: 'minimize' },
-            { type: 'separator' },
-            { role: 'zoom' },
-            { type: 'separator' },
+            { role: "minimize" },
+            { type: "separator" },
+            { role: "zoom" },
+            { type: "separator" },
             ...(isMac
                 ? [
-                    { type: 'separator' },
-                    { role: 'front' },
-                    { type: 'separator' },
-                    { role: 'window' }
+                    { type: "separator" },
+                    { role: "front" },
+                    { type: "separator" },
+                    { role: "window" },
                 ]
-                : [
-                    { role: 'close' }
-                ])
-        ]
+                : [{ role: "close" }]),
+        ],
     },
     {
-        role: 'help',
+        role: "help",
         submenu: [
             {
-                label: 'Learn More',
+                label: "Learn More",
                 click: async () => {
-                    await shell.openExternal('https://electronjs.org')
-                }
-            }
-        ]
+                    await shell.openExternal("https://electronjs.org");
+                },
+            },
+        ],
     },
     {
-        label: 'View',
+        label: "View",
         submenu: [
-            { role: 'togglefullscreen' },
-            { type: 'separator' },
-            { role: 'zoomIn' },
-            { type: 'separator' },
-            { role: 'zoomOut' },
-            { type: 'separator' },
-            { role: 'reload' }
-        ]
+            { role: "togglefullscreen" },
+            { type: "separator" },
+            { role: "zoomIn" },
+            { type: "separator" },
+            { role: "zoomOut" },
+            { type: "separator" },
+            { role: "reload" },
+        ],
     },
-
-
-]
+];
 
 const menu = Menu.buildFromTemplate(menuItems);
 Menu.setApplicationMenu(menu);
+
+const getActiveWindowTitle = () => {
+    const windowTitle = execSync(
+        `xprop -id $(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2) _NET_WM_NAME`
+    ).toString();
+
+    return windowTitle;
+}
 
 const createWindow = () => {
     // Create the browser window.
@@ -119,36 +151,66 @@ const createWindow = () => {
         width: 800,
         height: 600,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, "preload.js"),
+            enableAutoFill: false,
+        },
+    });
+
+    ipcMain.on("set-image", (event, data) => {
+        mainWindow.webContents.send("get-image", data);
+    });
+
+    // ipcMain.on('set-text', (event, totalTime) => {
+    //     console.log({ totalTime });
+    //     mainWindow.webContents.send('set-text', totalTime);
+    // })
+
+    mainWindow.on("focus", () => {
+        startTime = Date.now();
+    });
+
+    mainWindow.on("blur", () => {
+        if (startTime) {
+            totalTime += Date.now() - startTime;
         }
-    })
+    });
+
+    mainWindow.webContents.openDevTools();
 
     // and load the index.html of the app.
-    mainWindow.loadFile('index.html')
+    mainWindow.loadFile("index.html");
 
-    // Open the DevTools.
-    // mainWindow.webContents.openDevTools()
-}
+    setInterval(
+        updateWindow = () => {
+            const windowTitle = getActiveWindowTitle();
+            mainWindow.webContents.send("update-window-title", windowTitle);
+        }, 1000,
+    );
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+
+
+};
+
 app.whenReady().then(() => {
-    createWindow()
+    createWindow();
+    app.on("activate", () => {
+        console.log("ready");
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+});
 
-    app.on('activate', () => {
-        // On macOS it's common to re-create a window in the app when the
-        // dock icon is clicked and there are no other windows open.
-        if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    })
+app.on('browser-window-blur', () => {
+    console.log('browser-window-blur');
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
-})
+// app.on("ready", () => {
+//     const activeWindowTitle = getActiveWindowTitle();
+//     console.log("Currently focused window:", activeWindowTitle);
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+// });
+
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+});
+
+

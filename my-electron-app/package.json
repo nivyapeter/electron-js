@@ -24,6 +24,10 @@
     "electron": "30.0.8"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "active-win": "^9.0.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "get-windows": "^9.1.1",
+    "node-fetch": "^2.6.1",
+    "windows-active-process": "^1.1.1"
   }
 }
